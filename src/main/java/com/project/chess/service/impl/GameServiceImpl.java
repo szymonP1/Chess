@@ -17,7 +17,11 @@ import com.project.chess.service.GameService;
 import com.project.chess.service.UserService;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class GameServiceImpl implements GameService {
@@ -45,7 +49,7 @@ public class GameServiceImpl implements GameService {
         List<Figure> figures = game.getPlayer1().getFigures();
         figures.addAll(game.getPlayer2().getFigures());
 
-        return gameToDtoMapper.map(game, createBoard(figures));
+        return gameToDtoMapper.map(game, createBoard(figures), null);
     }
 
     @Override
@@ -53,61 +57,66 @@ public class GameServiceImpl implements GameService {
         validatePosition(moveRequestDto.getDestPosition());
         validatePosition(moveRequestDto.getInitPosition());
         Game game = gameRepository.findById(gameId).orElseThrow(() -> new NoContentException("Game#" + gameId + " was not found"));
-
+        
         User player1 = game.getPlayer1();
         User player2 = game.getPlayer2();
 
         final List<Figure> currentFigures;
         final List<Figure> opponentFigures;
+        User potentialWinner = null;
+        
         if(player1.hasTurn()) {
             currentFigures = player1.getFigures();
             opponentFigures = player2.getFigures();
+            potentialWinner = player2;
         } else {
             currentFigures = player2.getFigures();
             opponentFigures = player1.getFigures();
+            potentialWinner = player1;
         }
 
+        String kingsLocation = getKingsLocation(currentFigures);
         int initY = decipherMoveRequestDto(moveRequestDto.getInitPosition())[0];
         int initX = decipherMoveRequestDto(moveRequestDto.getInitPosition())[1];
         int destY = decipherMoveRequestDto(moveRequestDto.getDestPosition())[0];
         int destX = decipherMoveRequestDto(moveRequestDto.getDestPosition())[1];
 
-        Figure figure = findFigure(currentFigures, initX, initY);
+        Figure figure = findFigure(currentFigures, initX, initY, moveRequestDto.getInitPosition(), false);
 
         List<String> possibleMoves = getMoves(gameId, moveRequestDto).getMoves();
-        if (!possibleMoves.contains(moveRequestDto.getDestPosition()) && figure != null) {
-            StringBuilder builder = new StringBuilder();
-            builder.append("\nPossible moves: \n");
-            for (String s : possibleMoves) {
-                builder.append(s).append("\n");
-            }
-            throw new BadRequestException(figure.getName() + " can't move to desired position." + builder);
+        if (!possibleMoves.contains(moveRequestDto.getDestPosition())) {
+            throw new BadRequestException(figure.getName() + " can't move to desired position." + getPossibleMovesDescription(possibleMoves));
         }
 
-        Figure killedFigure = findFigure(opponentFigures, destX, destY);
+        Figure killedFigure = findFigure(opponentFigures, destX, destY, moveRequestDto.getInitPosition(), true);
         if (killedFigure != null) {
             killedFigure.setAlive(false);
             System.out.println("Figure was killed: " + killedFigure.getName());
+            opponentFigures.remove(killedFigure);
         }
-//        for(Figure f : opponentFigures) {
-//            if(f.isAlive()) {
-//                if (f.getX() == destX && f.getY() == destY) {
-//                    f.setAlive(false);
-//                    System.out.println("Figure was killed: " + f.getName());
-//                }
-//            }
-//        }
 
-        if (figure == null) {
-            throw new BadRequestException("There is no you're figure on " + moveRequestDto.getInitPosition());
+        List<Figure> allFigures = Stream.of(currentFigures, opponentFigures)
+                .flatMap(Collection::stream)
+                .collect(Collectors.toList());
+
+        if(checkForMate(opponentFigures, currentFigures)) {
+            userService.endGameUpdates(player1, player2);
+            return gameToDtoMapper.map(game, createBoard(allFigures), potentialWinner.getName());
         }
+
         figure.setX(destX);
         figure.setY(destY);
 
+        checkForChecks(moveRequestDto.getDestPosition(),  currentFigures, opponentFigures, kingsLocation, figure, false);
+
+        if(killedFigure != null && "KING".equals(killedFigure.getName())) {
+            userService.endGameUpdates(player1, player2);
+            return gameToDtoMapper.map(game, createBoard(allFigures), potentialWinner.getName());
+        }
+
         figureRepository.flush();
         userService.updatePlayers(player1, player2);
-        currentFigures.addAll(opponentFigures);
-        return gameToDtoMapper.map(game, createBoard(currentFigures));
+        return gameToDtoMapper.map(game, createBoard(allFigures), null);
     }
 
     @Override
@@ -116,14 +125,54 @@ public class GameServiceImpl implements GameService {
         Game game = gameRepository.findById(gameId).orElseThrow(
                 () -> new NoContentException("Game#" + gameId + " was not found"));
 
-        List<Figure> figures = game.getPlayer1().getFigures();
-        figures.addAll(game.getPlayer2().getFigures());
+        List<Figure> allFigures = Stream.of(game.getPlayer1().getFigures(), game.getPlayer2().getFigures())
+                .flatMap(Collection::stream)
+                .collect(Collectors.toList());
 
         int initY = decipherMoveRequestDto(moveRequestDto.getInitPosition())[0];
         int initX = decipherMoveRequestDto(moveRequestDto.getInitPosition())[1];
-        final PossibleMovesDto possibleMovesDto = figureService.checkMovePosibilities(findFigure(figures, initX, initY), getBoard(figures));
+        final PossibleMovesDto possibleMovesDto = figureService.checkMovePosibilities(findFigure(allFigures, initX, initY, moveRequestDto.getInitPosition(), false), getBoard(allFigures));
         possibleMovesDto.setInitialPosition(moveRequestDto.getInitPosition());
         return possibleMovesDto;
+    }
+
+    private boolean checkForChecks(String destPosition, List<Figure> currentFigures, List<Figure> opponentFigures, String kingsLocation, Figure king, boolean lookingForMate) {
+        if(king != null && "KING".equals(king.getName())) {
+            if (checkForCheck(true, currentFigures, opponentFigures, destPosition, kingsLocation)) {
+                if(lookingForMate) {
+                    return true;
+                } else {
+                    throw new BadRequestException("It would be check!");
+                }
+            }
+        } else {
+            if (checkForCheck(false,  currentFigures, opponentFigures, destPosition, kingsLocation)) {
+                if(lookingForMate) {
+                    return true;
+                } else {
+                    throw new BadRequestException("It would be check!");
+                }
+            }
+        }
+        return false;
+    }
+
+    private StringBuilder getPossibleMovesDescription(List<String> possibleMoves) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("\nPossible moves: \n");
+        for (String s : possibleMoves) {
+            builder.append(s).append("\n");
+        }
+        return builder;
+    }
+
+    private String getKingsLocation(List<Figure> figures) {
+        for (Figure f: figures) {
+            if("KING".equals(f.getName())) {
+                return "" + (char)(f.getY() + 65) + (f.getX() + 1);
+            }
+        }
+        return "";
     }
 
     private char[][] getBoard(List<Figure> figures) {
@@ -143,7 +192,7 @@ public class GameServiceImpl implements GameService {
         return board;
     }
 
-    private Figure findFigure(List<Figure> figures, int x, int y) {
+    private Figure findFigure(List<Figure> figures, int x, int y, String initPosition, boolean lookingForKill) {
         for (Figure f : figures) {
             if (f.isAlive()) {
                 if (f.getX() == x && f.getY() == y) {
@@ -154,7 +203,11 @@ public class GameServiceImpl implements GameService {
             }
         }
 
-        return null;
+        if(!lookingForKill) {
+            throw new BadRequestException("There is no you're figure on " + initPosition);
+        } else {
+            return null;
+        }
     }
 
     private void validatePosition(String position) {
@@ -262,6 +315,92 @@ public class GameServiceImpl implements GameService {
         }
 
         return builder.toString();
+    }
+
+    private boolean checkForCheck(boolean isKing, List<Figure> alliesFigures, List<Figure> opponentFigures, String destination, String kingsLocation) {
+        List<Figure> allFigures = Stream.of(alliesFigures, opponentFigures)
+                .flatMap(Collection::stream)
+                .collect(Collectors.toList());
+
+        char[][] getBoard = getBoard(allFigures);
+        List<String> opponentsMoves = new ArrayList<>();
+
+        getOpponentMoves(opponentFigures, getBoard, opponentsMoves);
+        if (isKing) {
+            return opponentsMoves.contains(destination);
+        }
+
+        return opponentsMoves.contains(kingsLocation);
+    }
+
+    private Figure findCheckingFigure(List<Figure> opponentFigures, String destination, char[][] getBoard, List<String> opponentsMoves) {
+        if(opponentsMoves.contains(destination)) {
+            for(Figure f: opponentFigures) {
+                if (figureService.checkMovePosibilities(f, getBoard).getMoves().contains(destination)) {
+                    return f;
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean checkForMate(List<Figure> opponentFigures, List<Figure> alliesFigures) {
+        List<Figure> allFigures = Stream.of(alliesFigures, opponentFigures)
+                .flatMap(Collection::stream)
+                .collect(Collectors.toList());
+
+        char[][] board = getBoard(allFigures);
+        Figure king = alliesFigures.stream().filter(figure -> "KING".equals(figure.getName())).findFirst().get();
+        List<String> kingsMoves = figureService.checkMovePosibilities(king, board).getMoves();
+        List<String> opponentsMoves = new ArrayList<>();
+
+        getOpponentMoves(opponentFigures, board, opponentsMoves);
+        boolean isCheckMate = true;
+        for(String s : kingsMoves) {
+            if(!checkForChecks(s, alliesFigures, opponentFigures, getKingsLocation(alliesFigures), king, true)) {
+                isCheckMate = false;
+            }
+        }
+
+        if(isCheckMate) {
+            isCheckMate = false;
+            for(String s: kingsMoves){
+                Figure checkingFigure = findCheckingFigure(opponentFigures, s, board, opponentsMoves);
+                if(getCheckMatingMoves(checkingFigure, board, alliesFigures).contains(s)) {
+                   isCheckMate = true;
+                }
+            }
+        }
+
+        return isCheckMate && kingsMoves.size() > 0;
+    }
+
+    private List<String> getCheckMatingMoves(Figure checkingFigure, char[][] board, List<Figure> alliedFigures) {
+        List<String> blockingMoves = new ArrayList<>();
+        List<String> checkingMoves = figureService.checkMovePosibilities(checkingFigure, board).getMoves();
+        for (Figure f: alliedFigures) {
+            if ("PAWN".equals(f.getName())) {
+                blockingMoves.addAll(figureService.checkMovePosibilities(f, board, true).getMoves());
+            } else {
+                blockingMoves.addAll(figureService.checkMovePosibilities(f, board).getMoves());
+            }
+        }
+
+        for(String s : blockingMoves) {
+            checkingMoves.remove(s);
+        }
+
+        return checkingMoves;
+    }
+
+    private void getOpponentMoves(List<Figure> opponentFigures, char[][] getBoard, List<String> opponentsMoves) {
+        for (Figure f: opponentFigures) {
+            if ("PAWN".equals(f.getName())) {
+                opponentsMoves.addAll(figureService.checkMovePosibilities(f, getBoard, true).getMoves());
+            } else {
+                opponentsMoves.addAll(figureService.checkMovePosibilities(f, getBoard).getMoves());
+            }
+        }
     }
 
     private char getFigure(int x, int y, List<Figure> figures) {

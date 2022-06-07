@@ -8,6 +8,15 @@ public class GameDto {
     private String board;
     private Long gameId;
     private String currentTurn;
+    private String winner;
+
+    public String getWinner() {
+        return winner;
+    }
+
+    public void setWinner(String winner) {
+        this.winner = winner;
+    }
 
     public String getCurrentTurn() {
         return currentTurn;
@@ -48,7 +57,11 @@ public class GameDto {
         builder.append("Players: [").append(players.get(0)).append(" vs ").append(players.get(1)).append("]\n");
         builder.append("LowerCase = WHITES, UpperCase = BLACKS\n");
         builder.append("p = pawn, r = rook, h = knight, b = bishop, k = king, q = queen\n");
-        builder.append("Current turn: ").append(currentTurn).append("\n\n");
+        if (winner != null) {
+            builder.append("Check Mate! ").append(winner).append(" won! Grats!").append("\n\n");
+        } else {
+            builder.append("Current turn: ").append(currentTurn).append("\n\n");
+        }
         builder.append(board);
 
         return builder.toString();

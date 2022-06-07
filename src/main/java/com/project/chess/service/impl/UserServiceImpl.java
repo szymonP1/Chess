@@ -110,8 +110,20 @@ public class UserServiceImpl implements UserService {
         king.setAlive(true);
         figureRepository.save(king);
         initialList.add(king);
+
         user.setFigures(initialList);
         user.setColor(color);
+        userRepository.flush();
+    }
+
+    @Override
+    public void endGameUpdates(User player1, User player2) {
+        player1.setGame(null);
+        player1.setFigures(null);
+        player1.setColor(null);
+        player2.setGame(null);
+        player2.setFigures(null);
+        player2.setColor(null);
 
         userRepository.flush();
     }

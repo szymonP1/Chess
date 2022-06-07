@@ -14,4 +14,6 @@ public interface UserService {
     void createInitialSetOfFigures(User user, Color color);
 
     void updatePlayers(User player1, User player2);
+
+    void endGameUpdates(User player1, User player2);
 }

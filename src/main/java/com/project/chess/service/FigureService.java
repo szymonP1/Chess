@@ -8,4 +8,5 @@ import java.util.List;
 public interface FigureService {
 
     PossibleMovesDto checkMovePosibilities(Figure figure, char[][] board);
+    PossibleMovesDto checkMovePosibilities(Figure figure, char[][] board, boolean forEnemyPawn);
 }

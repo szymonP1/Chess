@@ -7,7 +7,6 @@ import com.project.chess.service.FigureService;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import static java.lang.Math.abs;
@@ -20,7 +19,7 @@ public class FigureServiceImpl implements FigureService {
         final PossibleMovesDto movesDto = new PossibleMovesDto();
         movesDto.setFigureName(figure.getColor() + " " + figure.getName());
         if("PAWN".equals(figure.getName())) {
-            movesDto.setMoves(getPawnMovesFromLocation(figure.getColor(), figure.getX(), figure.getY(), board));
+            movesDto.setMoves(getPawnMovesFromLocation(figure.getColor(), figure.getX(), figure.getY(), board, false));
         }
         if("HORSE".equals(figure.getName())) {
             movesDto.setMoves(getKnightMovesFromLocation(figure.getColor(), figure.getX(), figure.getY(), board));
@@ -31,11 +30,22 @@ public class FigureServiceImpl implements FigureService {
         if("BISHOP".equals(figure.getName())) {
             movesDto.setMoves(getBishopMovesFromLocation(figure.getColor(), figure.getX(), figure.getY(), board));
         }
-        if("QUEEN".equals(figure.getName())) {
+        if ("QUEEN".equals(figure.getName())) {
             movesDto.setMoves(getQueenMovesFromLocation(figure.getColor(), figure.getX(), figure.getY(), board));
         }
-        if("KING".equals(figure.getName())) {
+        if ("KING".equals(figure.getName())) {
             movesDto.setMoves(getKingMovesFromLocation(figure.getColor(), figure.getX(), figure.getY(), board));
+        }
+
+        return movesDto;
+    }
+
+    @Override
+    public PossibleMovesDto checkMovePosibilities(Figure figure, char[][] board, boolean forEnemyPawn) {
+        final PossibleMovesDto movesDto = new PossibleMovesDto();
+        movesDto.setFigureName(figure.getColor() + " " + figure.getName());
+        if ("PAWN".equals(figure.getName())) {
+            movesDto.setMoves(getPawnMovesFromLocation(figure.getColor(), figure.getX(), figure.getY(), board, forEnemyPawn));
         }
 
         return movesDto;
@@ -43,10 +53,9 @@ public class FigureServiceImpl implements FigureService {
 
     private List<String> getKingMovesFromLocation(Color color, int p, int q, char[][] board) {
         List<String> moves = new ArrayList<>();
-        int[] X = { -1, 1, 0, 0, -1, -1, 1, 1 };
-        int[] Y = { 0, 0, 1, -1, 1, -1, -1, -1 };
+        int[] X = {-1, 1, 0, 0, -1, -1, 1, 1};
+        int[] Y = {0, 0, 1, -1, 1, -1, -1, 1};
         char symbolOfAlies = color.equals(Color.WHITE) ? 'W' : 'B';
-        char symbolOfEnemies = color.equals(Color.WHITE) ? 'B' : 'W';
 
         for (int i = 0; i < 8; i++) {
             int x = p + X[i];
@@ -73,14 +82,16 @@ public class FigureServiceImpl implements FigureService {
         char symbolOfEnemies = color.equals(Color.WHITE) ? 'B' : 'W';
         boolean shouldBreak = false;
 
-        //III
         for(int i = x - 1; i >= 0; i--) {
             for (int j = y; j < 8; j++) {
                 if (abs(x - i) == abs(y - j)) {
-                    moves.add("" + (char)(65 + j) + (i + 1));
                     if ((i - 1 >= 0 && j + 1 <= 7) &&
-                            (board[j][i] == symbolOfEnemies
-                                    || board[j+1][i-1] == symbolOfAlies)) {
+                            (board[j + 1][i - 1] == symbolOfAlies || board[j][i] == symbolOfAlies)) {
+                        shouldBreak = true;
+                        break;
+                    }
+                    moves.add("" + (char) (65 + j) + (i + 1));
+                    if (board[j][i] == symbolOfEnemies) {
                         shouldBreak = true;
                         break;
                     }
@@ -93,10 +104,13 @@ public class FigureServiceImpl implements FigureService {
         for(int i = x - 1; i >= 0; i--) {
             for (int j = y; j >= 0; j--) {
                 if (abs(x - i) == abs(y - j)) {
-                    moves.add("" + (char)(65 + j) + (i + 1));
                     if ((i - 1 >= 0 && j - 1 >= 0) &&
-                            (board[j][i] == symbolOfEnemies
-                                    || board[j-1][i-1] == symbolOfAlies)) {
+                            (board[j - 1][i - 1] == symbolOfAlies || board[j][i] == symbolOfAlies)) {
+                        shouldBreak = true;
+                        break;
+                    }
+                    moves.add("" + (char) (65 + j) + (i + 1));
+                    if (board[j][i] == symbolOfEnemies) {
                         shouldBreak = true;
                         break;
                     }
@@ -109,10 +123,13 @@ public class FigureServiceImpl implements FigureService {
         for(int i = x +1; i < 8; i++) {
             for (int j = y; j >= 0; j--) {
                 if (abs(x - i) == abs(y - j)) {
-                    moves.add("" + (char)(65 + j) + (i + 1));
                     if ((i + 1 <= 7 && j - 1 >= 0) &&
-                            (board[j][i] == symbolOfEnemies
-                                    || board[j-1][i+1] == symbolOfAlies)) {
+                            (board[j - 1][i + 1] == symbolOfAlies || board[j][i] == symbolOfAlies)) {
+                        shouldBreak = true;
+                        break;
+                    }
+                    moves.add("" + (char) (65 + j) + (i + 1));
+                    if (board[j][i] == symbolOfEnemies) {
                         shouldBreak = true;
                         break;
                     }
@@ -125,10 +142,13 @@ public class FigureServiceImpl implements FigureService {
         for(int i = x +1; i < 8; i++) {
             for (int j = y; j < 8; j++) {
                 if (abs(x - i) == abs(y - j)) {
-                    moves.add("" + (char)(65 + j) + (i + 1));
                     if ((i + 1 <= 7 && j + 1 <= 7) &&
-                            (board[j][i] == symbolOfEnemies
-                                    || board[j+1][i+1] == symbolOfAlies)) {
+                            (board[j + 1][i + 1] == symbolOfAlies || board[j][i] == symbolOfAlies)) {
+                        shouldBreak = true;
+                        break;
+                    }
+                    moves.add("" + (char) (65 + j) + (i + 1));
+                    if (board[j][i] == symbolOfEnemies) {
                         shouldBreak = true;
                         break;
                     }
@@ -218,28 +238,28 @@ public class FigureServiceImpl implements FigureService {
         return moves;
     }
 
-    private List<String> getPawnMovesFromLocation(Color color, int x, int y, char[][] board) {
+    private List<String> getPawnMovesFromLocation(Color color, int x, int y, char[][] board, boolean forEnemyPawn) {
         List<String> moves = new ArrayList<>();
         char symbolOfEnemies = color.equals(Color.WHITE) ? 'B' : 'W';
 
-        if(color == Color.WHITE) {
-            if(x + 1 <= 7 && board[y][x + 1] == ' ') {
-                moves.add("" + ((char)(y + 65)) + (x + 2));
+        if (color == Color.WHITE) {
+            if (x + 1 <= 7 && board[y][x + 1] == ' ' && !forEnemyPawn) {
+                moves.add("" + ((char) (y + 65)) + (x + 2));
             }
-            if(y > 0 && board[y - 1][x + 1] == symbolOfEnemies) {
-                moves.add("" + ((char)(y + 65 - 1)) + (x + 2));
+            if (y > 0 && (board[y - 1][x + 1] == symbolOfEnemies || forEnemyPawn)) {
+                moves.add("" + ((char) (y + 65 - 1)) + (x + 2));
             }
-            if(y < 7 && board[y + 1][x + 1] == symbolOfEnemies) {
-                moves.add("" + ((char)(y + 65 + 1)) + (x + 2));
+            if (y < 7 && (board[y + 1][x + 1] == symbolOfEnemies || forEnemyPawn)) {
+                moves.add("" + ((char) (y + 65 + 1)) + (x + 2));
             }
         } else {
-            if(x - 1 >= 0 && board[y][x - 1] == ' ') {
-                moves.add("" + ((char)(y + 65)) + (x));
+            if (x - 1 >= 0 && board[y][x - 1] == ' ' && !forEnemyPawn) {
+                moves.add("" + ((char) (y + 65)) + (x));
             }
-            if(y > 0 && board[y - 1][x - 1] == symbolOfEnemies) {
-                moves.add("" + (char)(y + 65 - 1) + (x));
+            if (y > 0 && (board[y - 1][x - 1] == symbolOfEnemies || forEnemyPawn)) {
+                moves.add("" + (char) (y + 65 - 1) + (x));
             }
-            if(y < 7 && board[y + 1][x - 1] == symbolOfEnemies) {
+            if (y < 7 && (board[y + 1][x - 1] == symbolOfEnemies || forEnemyPawn)) {
                 moves.add("" + (char) (y + 65 + 1) + (x));
             }
         }
