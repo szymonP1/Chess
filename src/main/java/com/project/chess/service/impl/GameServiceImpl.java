@@ -6,6 +6,7 @@ import com.project.chess.model.Color;
 import com.project.chess.model.GameToDtoMapper;
 import com.project.chess.model.dto.GameDto;
 import com.project.chess.model.dto.MoveRequestDto;
+import com.project.chess.model.dto.PossibleMovesDto;
 import com.project.chess.model.entity.Figure;
 import com.project.chess.model.entity.Game;
 import com.project.chess.model.entity.User;
@@ -66,36 +67,40 @@ public class GameServiceImpl implements GameService {
             opponentFigures = player1.getFigures();
         }
 
-
         int initY = decipherMoveRequestDto(moveRequestDto.getInitPosition())[0];
         int initX = decipherMoveRequestDto(moveRequestDto.getInitPosition())[1];
         int destY = decipherMoveRequestDto(moveRequestDto.getDestPosition())[0];
         int destX = decipherMoveRequestDto(moveRequestDto.getDestPosition())[1];
 
         Figure figure = findFigure(currentFigures, initX, initY);
-//        for (Figure f : currentFigures) {
-//            if (f.isAlive()) {
-//                if (f.getX() == initX && f.getY() == initY) {
-//                    //check move possibilities
-//                    figure = f;
-//                    System.out.println("Found figure: " + figure.getName());
+
+        List<String> possibleMoves = getMoves(gameId, moveRequestDto).getMoves();
+        if (!possibleMoves.contains(moveRequestDto.getDestPosition()) && figure != null) {
+            StringBuilder builder = new StringBuilder();
+            builder.append("\nPossible moves: \n");
+            for (String s : possibleMoves) {
+                builder.append(s).append("\n");
+            }
+            throw new BadRequestException(figure.getName() + " can't move to desired position." + builder);
+        }
+
+        Figure killedFigure = findFigure(opponentFigures, destX, destY);
+        if (killedFigure != null) {
+            killedFigure.setAlive(false);
+            System.out.println("Figure was killed: " + killedFigure.getName());
+        }
+//        for(Figure f : opponentFigures) {
+//            if(f.isAlive()) {
+//                if (f.getX() == destX && f.getY() == destY) {
+//                    f.setAlive(false);
+//                    System.out.println("Figure was killed: " + f.getName());
 //                }
 //            }
 //        }
 
-        for(Figure f : opponentFigures) {
-            if(f.isAlive()) {
-                if (f.getX() == destX && f.getY() == destY) {
-                    f.setAlive(false);
-                    System.out.println("Figure was killed: " + f.getName());
-                }
-            }
-        }
-
-        if(figure == null) {
+        if (figure == null) {
             throw new BadRequestException("There is no you're figure on " + moveRequestDto.getInitPosition());
         }
-
         figure.setX(destX);
         figure.setY(destY);
 
@@ -106,7 +111,7 @@ public class GameServiceImpl implements GameService {
     }
 
     @Override
-    public List<String> getMoves(Long gameId, MoveRequestDto moveRequestDto) {
+    public PossibleMovesDto getMoves(Long gameId, MoveRequestDto moveRequestDto) {
         validatePosition(moveRequestDto.getInitPosition());
         Game game = gameRepository.findById(gameId).orElseThrow(
                 () -> new NoContentException("Game#" + gameId + " was not found"));
@@ -116,8 +121,9 @@ public class GameServiceImpl implements GameService {
 
         int initY = decipherMoveRequestDto(moveRequestDto.getInitPosition())[0];
         int initX = decipherMoveRequestDto(moveRequestDto.getInitPosition())[1];
-
-        return figureService.checkMovePosibilities(findFigure(figures, initX, initY), getBoard(figures));
+        final PossibleMovesDto possibleMovesDto = figureService.checkMovePosibilities(findFigure(figures, initX, initY), getBoard(figures));
+        possibleMovesDto.setInitialPosition(moveRequestDto.getInitPosition());
+        return possibleMovesDto;
     }
 
     private char[][] getBoard(List<Figure> figures) {
@@ -129,7 +135,9 @@ public class GameServiceImpl implements GameService {
         }
 
         for (Figure f: figures) {
-            board[f.getY()][f.getX()] = 'x';
+            if (f.isAlive()) {
+                board[f.getY()][f.getX()] = f.getColor().equals(Color.WHITE) ? 'W' : 'B';
+            }
         }
 
         return board;
@@ -140,7 +148,7 @@ public class GameServiceImpl implements GameService {
             if (f.isAlive()) {
                 if (f.getX() == x && f.getY() == y) {
                     //check move possibilities
-                    System.out.println("Found figure: " + f.getName());
+                    System.out.println("Found figure: " + f.getColor() + " " + f.getName());
                     return f;
                 }
             }
@@ -236,8 +244,7 @@ public class GameServiceImpl implements GameService {
     private void validateUser(User user, Game game) {
         System.out.println("Validating user");
         if(user.getGame() != null && !user.getGame().getId().equals(game.getId())) {
-            System.out.println(user.getId() + " " + game.getId());
-            throw new BadRequestException("User + " + user.getId() + " is already in different game");
+            throw new BadRequestException("User " + user.getId() + " is already in different game");
         }
     }
 
