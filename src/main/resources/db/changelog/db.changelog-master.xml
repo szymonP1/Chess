@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xmlns:pro="http://www.liquibase.org/xml/ns/pro"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+		http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.9.xsd
+		http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd
+		http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.9.xsd">
+    <changeSet id="0.0.36.5" author="Panek Szymon">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT count(*) FROM information_schema.tables
+                WHERE table_name = 'game'
+            </sqlCheck>
+        </preConditions>
+        <createSequence sequenceName="game_sequence" incrementBy="1" minValue="0"/>
+        <createTable tableName="game">
+            <column type="bigint" name="id"/>
+            <column type="bigint" name="player1_id"/>
+            <column type="bigint" name="player2_id"/>
+        </createTable>
+<!--        <sql>drop all objects</sql>-->
+<!--        <sql>drop sequence game_sequence</sql>-->
+    </changeSet>
+    <changeSet id="0.0.34" author="Panek Szymon">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT count(*) FROM information_schema.tables
+                WHERE table_name = 'user'
+            </sqlCheck>
+        </preConditions>
+        <createSequence sequenceName="user_sequence" incrementBy="1" minValue="0"/>
+        <createTable tableName="user">
+            <column type="bigint" name="id"/>
+            <column type="varchar" name="name"/>
+            <column type="bigint" name="game_id"/>
+            <column type="boolean" name="has_turn"/>
+            <column type="varchar" name="color"/>
+        </createTable>
+    </changeSet>
+    <changeSet id="0.0.33" author="Panek Szymon">
+        <preConditions  onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT count(*) FROM information_schema.tables
+                WHERE table_name = 'figure'
+            </sqlCheck>
+        </preConditions>
+        <createTable tableName="figure">
+            <column type="bigint" name="id"/>
+            <column type="smallint" name="x"/>
+            <column type="smallint" name="y"/>
+            <column type="varchar" name="color"/>
+            <column type="boolean" name="is_alive"/>
+            <column type="smallint" name="dtype"/>
+        </createTable>
+    </changeSet>
+    <changeSet id="0.0.14" author="Panek Szymon">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT count(*) FROM information_schema.sequences
+                WHERE sequence_name = 'figure_sequence'
+            </sqlCheck>
+        </preConditions>
+        <createSequence sequenceName="figure_sequence" incrementBy="1" minValue="0"/>
+    </changeSet>
+    <changeSet id="0.0.26" author="Panek Szymon">
+        <preConditions  onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT count(*) FROM information_schema.tables
+                WHERE table_name = 'user_figures'
+            </sqlCheck>
+        </preConditions>
+        <createTable tableName="user_figures">
+            <column type="bigint" name="user_id"/>
+            <column type="bigint" name="figures_id"/>
+        </createTable>
+    </changeSet>
+</databaseChangeLog>
